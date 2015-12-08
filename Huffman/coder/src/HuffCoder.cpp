@@ -127,7 +127,7 @@ int main() {
     ifstream readFile; // create an object of stream class to open a file
     string filename = requestForFileName(readFile);
 
-    Vector<int>weightOfChars(255, 0); // create a vector with size 255 initialized with zeros for saving number of occurences for each character
+    Vector<int>weightOfChars(256, 0); // create a vector with size 256 initialized with zeros for saving number of occurences for each character
     int numOfChars = countingWeightOfCharacters(readFile, weightOfChars);
 
 
@@ -137,7 +137,7 @@ int main() {
     Node* rootPtr = buildTree(weightOfChars, delimiter);
 
     Vector<int> code; // declare a Vector for saving pass to a particular character, which corresponds to the code
-    Vector< Vector<int> > codeTable(255); // declare a Vector for saving codes for each character, where possition of code is equal to ASCII code of character
+    Vector< Vector<int> > codeTable(256); // declare a Vector for saving codes for each character, where possition of code is equal to ASCII code of character
     int numOfCodes = 0;
     if(rootPtr){ // if file is not empty
         if (isLeaf(rootPtr)){ // if file consists only one character assign it a code
@@ -178,7 +178,7 @@ int countingWeightOfCharacters(ifstream & readFile, Vector <int> & weightOfChars
     int numOfChars = 0; // number of characters in the source file
     // reads the file while it has next character
     while (readFile.get(ch)){
-        weightOfChars[ch]++;
+        weightOfChars[(ch + 128)]++;
         ++numOfChars;
     }
     readFile.close();
@@ -194,10 +194,10 @@ Node* buildTree(Vector <int> & weightOfChars, char & delimiter){
     bool flag = 1; // set flag to prevent overwriting a delimiter
     for(int i = 0; i < weightOfChars.size(); ++i){
         if(weightOfChars[i] > 0){
-            Node* node = new Node(i, weightOfChars[i]);
+            Node* node = new Node((i - 128), weightOfChars[i]);
             weightsOfNodes.enqueue(node, weightOfChars[i]);
         }
-        else if(flag && (i > 31)){ // looking for a character that is not a control code and has a number of occurences which is equal zero
+        else if((flag && (i < 128)) || (flag && (i > 159))){ // looking for a character that is not a control code and has a number of occurences which is equal zero
             delimiter = i;
             flag = 0;
         }
@@ -237,7 +237,7 @@ void codingTable(Node* n, Vector<int> & code, Vector< Vector<int> > & codeTable,
     }
 
     if(isLeaf(n)){
-        codeTable.set(n->value, code);
+        codeTable.set((n->value + 128), code);
         ++numOfCodes; // counter of coded symbols
 
     }
@@ -262,7 +262,7 @@ void writeTable(ofbitstream & writeFile, Vector< Vector<int> > & codeTable, char
     writeByte(writeFile, delimiter); // write a delimiter to delimit information in the archive file
     for(int i = 0; i < codeTable.size(); ++i){
         if (codeTable[i].size() > 0){
-            writeByte(writeFile, i); // write a character - one of coded symbols of the sourse file
+            writeByte(writeFile, (i - 128)); // write a character - one of coded symbols of the sourse file
             for(int j = 0; j < codeTable[i].size(); ++j){
                 writeByte(writeFile, codeTable[i][j]); // write his code
             }
@@ -300,8 +300,8 @@ void codingText(string filename, Vector< Vector<int> > & codeTable, ofbitstream 
     char j; // declare a variable for reading a file by single character
     // reads the file while it has next character
     while (readFile.get(j)){
-        for(int i = 0; i < codeTable[j].size(); ++i){ // necessary character is located at possition (index) that corresponds to of its ASCII code
-            writeFile.writeBit(codeTable[j][i]);
+        for(int i = 0; i < codeTable[(j + 128)].size(); ++i){ // necessary character is located at possition (index) that corresponds to of its ASCII code
+            writeFile.writeBit(codeTable[(j + 128)][i]);
         }
     }
     readFile.close();

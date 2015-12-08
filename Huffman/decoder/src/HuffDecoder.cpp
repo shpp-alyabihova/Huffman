@@ -90,10 +90,13 @@ string requestForFileName(ifbitstream &);
  */
 int main() {
     ifbitstream readArch; // create an object of stream class to open a file
-    string archFilename = requestForFileName(readArch);
+    requestForFileName(readArch);
 
     // composes a name for text file by deleting "Arch" from the end of the filename
-    string filename = archFilename.substr(0, archFilename.length() - 8) + archFilename.substr(archFilename.length() - 4);
+    string filename;
+    cout << "Please, input a filename to unzip: ";
+    cin >> filename;
+    cout << endl;
     ofstream writeFile(filename);
 
     Vector <char> symbols; // declare a Vector for saving encoded characters
@@ -149,7 +152,7 @@ int readTable(ifbitstream & readArch, Vector <char> & symbols, Vector<Vector<boo
 
 
 char readByte(ifbitstream & readArch){
-    unsigned char ch = 0;
+    char ch = 0;
     //use bitwice addition and bit shift current bit to obtain the correct value of character
     for(int i = 7; i >= 0; --i){
         int bit = readArch.readBit();
@@ -174,7 +177,7 @@ Node* buildTree(Vector <char> & symbols, Vector<Vector<bool> > & codes){
     Node * current = root;
     for(int i = 0; i < codes.size(); ++i){ // for all codes
         for(int j = 0; j < codes[i].size(); ++j){ // for all characters in code
-            if(codes[i][j]){                      // if character ia equal 1
+            if(codes[i][j]){                      // if character is equal 1
                 if(current->right == NULL){       // if node has not a right child
                     Node * n = new Node();        // create a new node
                     current->right = n;
