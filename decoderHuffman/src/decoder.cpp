@@ -4,7 +4,6 @@
 #include "console.h"
 #include "strlib.h"
 #include "vector.h"
-#include "bitstream.h"
 
 using namespace std;
 
@@ -28,12 +27,12 @@ public:
 
 /*
  * Read from the file information about encoded text
- * @param ifbitstream takes a reference to the stream of open file for bit by bit reading
+ * @param ifstream takes a reference to the stream of open file for reading as binary
  * @param Vector <char> takes a reference to vector for saving encoded symbols
  * @param Vector<Vector<bool> > takes a reference to vector for saving codes of encoded symbols
  * @return int a number of symbols in sourse file
  */
-unsigned int readTable(ifbitstream & readArch, Vector <char> & symbols, Vector<Vector<bool> > &codes);
+unsigned int readTable(ifstream & readArch, Vector <char> & symbols, Vector<Vector<bool> > &codes);
 
 
 /*
@@ -49,10 +48,10 @@ Node* buildTree(Vector <char> & symbols, Vector<Vector<bool> > &codes);
  * Decodes a sourse text and writes encoded text into a text file
  * @param int takes a number of all characters in the sourse text
  * @param ofstream takes a reference to the stream for writing file
- * @param ifbitstream takes a reference to the stream of open file for bit by bit reading
+ * @param ifstream takes a reference to the stream of open file
  * @param Node* takes a pointer to the root of the coding tree
  */
-void decodingText(unsigned int numOfChars, ofstream & writeFile, ifbitstream & readArch, Node* );
+void decodingText(unsigned int numOfChars, ofstream & writeFile, ifstream & readArch, Node* );
 
 
 /*
@@ -60,28 +59,20 @@ void decodingText(unsigned int numOfChars, ofstream & writeFile, ifbitstream & r
  */
 bool isLeaf(Node *);
 
-
 /*
- * Bitwise reading of one byte information
- * @param ifbitstream takes a reference to the stream of open file for bit by bit reading
- * @return char a character read bitwise
+ * Reads the calculated number of bytes that corresponds to the number of characters in the code divided by 8
+ * @param ifstream takes a reference to the stream of open file
+ * @param int takes the number of code symbols
+ * @return Vector <bool> the code of current charecter
  */
-char readByte(ifbitstream & readArch);
-
-
-/*
- * Bitwise reading of unsigned int
- * @param ifbitstream takes a reference to the stream of open file for bit by bit reading
- * @return unsigned int a number read bitwise
- */
-unsigned int readInteger(ifbitstream & readArch);
+Vector <bool> readCode(ifstream & readArch, int codeSize);
 
 
 /*
  * Prompts the user for a filename and tries to open file. If an unsuccessful attempt
  * to open a file again prompts the user for a filename. Otherwise returns a filename.
  */
-string requestForFileName(ifbitstream &);
+string requestForFileName(ifstream &);
 
 
 /*
@@ -89,14 +80,13 @@ string requestForFileName(ifbitstream &);
  *  Text decoded using a table of characters with corresponding codes, which is at the beggining of the archive file.
  */
 int main() {
-    ifbitstream readArch; // create an object of stream class to open a file
+    ifstream readArch; // create an object of stream class to open a file
     requestForFileName(readArch);
 
-    // composes a name for text file by deleting "Arch" from the end of the filename
+    // requests the file name to save the encoded file content
     string filename;
     cout << "Please, input a filename to to unzip: ";
     cin >> filename;
-    cout << endl;
     ofstream writeFile(filename, ios::binary);
 
     Vector <char> symbols; // declare a Vector for saving encoded characters
@@ -117,12 +107,12 @@ int main() {
 }
 
 
-string requestForFileName(ifbitstream & readArch){
+string requestForFileName(ifstream & readArch){
     while (true){
         string fileName = "";
         cout << "Please, enter file name: " << endl;
         cin >> fileName;
-        readArch.open(fileName);
+        readArch.open(fileName, ios::binary);
         if(!readArch.fail()){
             return fileName;
         }
@@ -132,53 +122,41 @@ string requestForFileName(ifbitstream & readArch){
 }
 
 
-unsigned int readTable(ifbitstream & readArch, Vector <char> & symbols, Vector<Vector<bool> > &codes){
-    unsigned int numChars = readInteger(readArch); // read a number of all symbols of the sourse file
-
+unsigned int readTable(ifstream & readArch, Vector <char> & symbols, Vector<Vector<bool> > &codes){
+    unsigned int numChars;
+    readArch.read((char *)&numChars, sizeof(numChars));
     if (numChars == 0){
         return numChars;
     }
-
-    int numCodes = readByte(readArch); // read a number of coded symbols of the sourse file
+    char ch = 0;
+    readArch.get(ch); // read a number of coded symbols of the sourse file
+    int numCodes = ch;
 
     if (numCodes == 0){
         numCodes = 256;
     }
 
-
     for(int i = 0; i < numCodes; ++i){ // read a code table
-        char ch = readByte(readArch);
+        readArch.get(ch);
         symbols.add(ch);
-        Vector<bool>code;
-        int codeSize = readByte(readArch);
-        for(int i = 0; i < codeSize; ++i){
-            int bit = readArch.readBit();
-            code.add(bit);
-        }
-        codes.add(code);
+        readArch.get(ch);
+        int codeSize = ch;
+        codes.add(readCode(readArch, codeSize));
     }
     return numChars;
 }
 
-
-char readByte(ifbitstream & readArch){
-    char ch = 0;
-    //use bitwice addition and bit shift current bit to obtain the correct value of character
-    for(int i = 7; i >= 0; --i){
-        int bit = readArch.readBit();
-        ch = ch | bit << i;
+Vector <bool> readCode(ifstream & readArch, int codeSize){
+    Vector<bool> code;
+    int size = (codeSize / 8 ) + ((codeSize % 8) ? 1 : 0); // size of buffer for reading bytes
+    char * buff = new char [size];
+    readArch.read(buff, size);
+    for (int i = 0; i < codeSize; ++i){
+        code.add(buff[i/8] < 0); // check most significant bit that is responsible for the sign of char
+        buff[i/8] = buff[i/8] << 1;
     }
-    return ch;
-}
-
-unsigned int readInteger(ifbitstream & readArch){
-    unsigned int num = 0;
-    //use bitwice addition and bit shift current bit to obtain the correct value of integer
-    for(int i = (sizeof (int) * 8 - 1); i >= 0; --i){
-        int bit = readArch.readBit();
-        num = num | bit << i;
-    }
-    return num;
+    delete [] buff;
+    return code;
 }
 
 
@@ -211,25 +189,27 @@ Node* buildTree(Vector <char> & symbols, Vector<Vector<bool> > & codes){
 
 
 
-void decodingText(unsigned int numOfChars, ofstream & writeFile, ifbitstream & readArch, Node* root){
+void decodingText(unsigned int numOfChars, ofstream & writeFile, ifstream & readArch, Node* root){
 
     Node * current = root;
+    char ch;
 
-    while (numOfChars > 0){
-        int bit = readArch.readBit();
-
-        if(bit == 1){
-            current = current->right;
+    while (readArch.get(ch)){
+        //readArch.get(ch);
+        for (int i = 7; i >= 0; --i){
+            if(ch & (1 << i))
+                current = current->right;
+            else
+                current = current->left;
+            if(isLeaf(current)){
+                writeFile.put(current->value);
+                current = root;
+                --numOfChars;
+            }
+            if (numOfChars == 0){
+                break;
+            }
         }
-        else {
-            current = current->left;
-        }
-        if(isLeaf(current)){
-            writeFile.put(current->value);
-            current = root;
-            --numOfChars;
-        }
-
     }
     readArch.close();
     writeFile.close();

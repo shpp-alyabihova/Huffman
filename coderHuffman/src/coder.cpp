@@ -5,7 +5,6 @@
 #include "strlib.h"
 #include "vector.h"
 #include "pqueue.h"
-#include "bitstream.h"
 
 using namespace std;
 
@@ -68,46 +67,59 @@ bool isLeaf(Node *);
 /*
  * Generates a table of charactars and their codes
  * @param Node* takes a pointer to the current node
- * @param Vector<int> takes a reference to the vector for saving code of current character
- * @param Vector<Vector<int> > takes a reference to the vector for saving coding table
+ * @param Vector<bool> takes a reference to the vector for saving code of current character
+ * @param Vector<Vector<bool> > takes a reference to the vector for saving coding table
  * @param int takes a reference for counting the number of codes (rows of table)
  */
-void codingTable(Node* n, Vector<int> &code, Vector<Vector<int> > & codeTable, int &);
+void codingTable(Node* n, Vector<bool> &code, Vector<Vector<bool> > & codeTable, int &);
 
 
 /*
  * Encodes the text and writes it to the text file
  * @param string takes a name of the file that will be archived
- * @param Vector<Vector<int> > takes a reference to the vector with code table
- * @param ofbitstream takes a reference to the stream of open file to a bit-recording
+ * @param Vector<Vector<bool> > takes a reference to the vector with code table
+ * @param ofstream takes a reference to the stream of open file to record as binary
  */
-void codingText(string filename, Vector <Vector<int> > & codeTable, ofbitstream & writefile);
+void codingText(string filename, Vector <Vector<bool> > & codeTable, ofstream & writefile);
 
 
 /*
  * Records the code table to the beginning of the file
- * @param ofbitstream takes a reference to the stream of open file to a bit-recording
- * @param Vector<Vector<int> > takes a reference to the vector with code table
- * @param int takes a number of all characters in the text
- * @param int takes a number of all codes (rows of the table)
+ * @param ofstream takes a reference to the stream of open file to record as binary
+ * @param Vector<Vector<bool> > takes a reference to the vector with code table
+ * @param unsigned int takes a number of all characters in the text
+ * @param int takes a number of encoded characters
  */
-void writeTable(ofbitstream & writeFile, Vector< Vector<int> > & codeTable, unsigned int numOfChars, int numOfCodes);
+void writeTable(ofstream & writeFile, Vector< Vector<bool> > & codeTable, unsigned int numOfChars, int numOfCodes);
 
 
 /*
- * Bitwise record one byte of information
- * @param ofbitstream takes a reference to the stream of open file to a bit-recording
- * @param char takes a character for recording to the file
+ * Writes code of character as set of bytes where each bit represens a bool value
+ * @param ofstream takes a reference to the stream of open file record as binary
+ * @param Vector<bool> takes a code of the character
  */
-void writeByte(ofbitstream & writefile, char ch);
+void writeCode(ofstream & writefile, Vector<bool> code);
 
 
 /*
- * Bitwise record unsigned integer to the open file
- * @param ofbitstream takes a reference to the stream of open file to a bit-recording
- * @param int takes unsigned integer to record to the file
+ * Writes code of character to the output file by bytes where a sequence of bits is equal to the sequence of bool values of code.
+ * @param ofstream takes a reference to the stream of open file record as binary
+ * @param Vector<bool> takes a code of the character
+ * @param char & takes a reference to the character which represents encoded byte.
+ * @param int & takes a reference to the possition of a current bit of encoded byte.
  */
-void writeInteger(ofbitstream & writefile, unsigned int number);
+void codingChar(ofstream & writefile, Vector<bool> code, char & byte, int & possition);
+
+
+
+/*
+ * Appends the required number of bits for a byte to write.
+ * @param ofstream takes a reference to the stream of open file record as binary
+ * @param char takes a character which represents encoded byte.
+ * @param int takes a possition of a current bit of encoded byte.
+ */
+void extendedToByte(ofstream & writefile, char byte, int possition);
+
 
 
 /*
@@ -131,8 +143,8 @@ int main() {
 
     Node* rootPtr = buildTree(weightOfChars);
 
-    Vector<int> code; // declare a Vector for saving pass to a particular character, which corresponds to the code
-    Vector< Vector<int> > codeTable(256); // declare a Vector for saving codes for each character, where possition of code is equal to ASCII code of character
+    Vector<bool> code; // declare a Vector for saving pass to a particular character, which corresponds to the code
+    Vector< Vector<bool> > codeTable(256); // declare a Vector for saving codes for each character, where possition of code is equal to ASCII code of character
     int numOfCodes = 0;
     if(rootPtr){ // if file is not empty
         if (isLeaf(rootPtr)){ // if file consists only one character assign it a code
@@ -142,7 +154,7 @@ int main() {
     }
     // composes a name for archive file by adding "Arch" between name of the source file and its extencion
     string archFile = filename.substr(0, filename.length() - 4) + "Arch.txt";
-    ofbitstream writeFile(archFile); // create an object of bit stream class to archive a file
+    ofstream writeFile(archFile.c_str(), ios::binary); // create an object of stream class to archive a file
 
 
     writeTable(writeFile, codeTable, numOfChars, numOfCodes);
@@ -173,7 +185,7 @@ unsigned int countingWeightOfCharacters(ifstream & readFile, Vector <int> & weig
     unsigned int numOfChars = 0; // number of characters in the source file
     // reads the file while it has next character
     while (readFile.get(ch)){
-        weightOfChars[(ch + 128)]++;
+        weightOfChars[(ch + 128)]++; // possition in the vector corresponds to ASCII code of character +128 (adding 128 to avoid negative values)
         ++numOfChars;
     }
     readFile.close();
@@ -214,7 +226,7 @@ Node* buildTree(Vector <int> & weightOfChars){
 }
 
 
-void codingTable(Node* n, Vector<int> & code, Vector< Vector<int> > & codeTable, int & numOfCodes){
+void codingTable(Node* n, Vector<bool> & code, Vector< Vector<bool> > & codeTable, int & numOfCodes){
 
     if(n->left != NULL){
         code.add(0);
@@ -244,58 +256,76 @@ bool isLeaf(Node * n){
 
 
 
-void writeTable(ofbitstream & writeFile, Vector< Vector<int> > & codeTable, unsigned int numOfChars, int numOfCodes){
-    writeInteger(writeFile, numOfChars); // write a number of all symbols of the sourse file
-    writeByte(writeFile, numOfCodes); // write a number of coded symbols of the sourse file
+void writeTable(ofstream & writeFile, Vector< Vector<bool> > & codeTable, unsigned int numOfChars, int numOfCodes){
+    writeFile.write((char *)&numOfChars, sizeof(numOfChars));
+    writeFile.put(numOfCodes);
 
     for(int i = 0; i < codeTable.size(); ++i){
         if (codeTable[i].size() > 0){
-            writeByte(writeFile, (i - 128)); // write a character - one of coded symbols of the sourse file
-            writeByte(writeFile, codeTable[i].size()); // write a length of code
-            for(int j = 0; j < codeTable[i].size(); ++j){
-                writeFile.writeBit(codeTable[i][j]); // write code of character
+            writeFile.put((i - 128));
+            writeFile.put(codeTable[i].size());
+            writeCode(writeFile, codeTable[i]);
+        }
+    }
+}
+
+
+void writeCode(ofstream & writefile, Vector<bool> code){
+      while(code.size() % 8){ // if the code is not a multiple of 8
+          code.add(0);          // append it with 0
+      }
+      int size = (code.size() / 8 );
+      char * buff = new char [size];
+      char byte = 0;
+
+      for (int i = 0; i < code.size(); ++i){
+          byte = (byte << 1) | code[i]; // shift by one and perform bitwise addition
+          if ((i + 1) % 8 == 0){ // after 7 shift obtain a byte
+              buff[i/8] = byte;
+              byte = 0;
+          }
+      }
+      writefile.write(buff, size);
+      delete [] buff;
+}
+
+
+void extendedToByte(ofstream & writefile, char byte, int possition){
+    while (possition < 8){
+        byte = byte | 0 << (7 - possition); // append zeros to the last byte from getting position
+        ++possition;
+    }
+    writefile << byte;
+
+}
+
+
+void codingChar(ofstream & writefile, Vector<bool> code, char & byte, int & possition){
+        for(int i = 0; i < code.size(); ++i){
+            byte = byte | (code[i] << (7 - possition)); // shift to the right possition to put the correct bit
+            ++possition;
+            if(possition == 8){ // when the byte is complete
+                writefile << byte;
+                byte = 0;
+                possition = 0;
             }
         }
-    }
 }
 
-
-void writeByte(ofbitstream & writefile, char ch){
-    int bit;
-    // use bitwise multiplication and bit shift unit for determining current bit of given character
-    for(int i = 7; i >= 0; --i){
-        if(ch & (1 << i)){
-            bit = 1;
-        }
-        else bit = 0;
-        writefile.writeBit(bit);
-    }
-}
-
-
-void writeInteger(ofbitstream & writefile, unsigned int number){
-    int bit;
-    // use bitwise multiplication and bit shift unit for determining current bit of given character
-    for(int i = (sizeof (int) * 8 - 1); i >= 0; --i){
-        if(number & (1 << i))
-            bit = 1;
-        else
-            bit = 0;
-        writefile.writeBit(bit);
-    }
-}
-
-void codingText(string filename, Vector< Vector<int> > & codeTable, ofbitstream & writeFile){
+void codingText(string filename, Vector< Vector<bool> > & codeTable, ofstream & writeFile){
 
     ifstream readFile;
     readFile.open(filename.c_str(), ios::binary); // open sourse file as binary
 
-    char j; // declare a variable for reading a file by single character
+    char ch; // declare a variable for reading a file by single character
+    char byte = 0; // to form a byte to write
+    int possition = 0; // possition of the current bit in the byte
     // reads the file while it has next character
-    while (readFile.get(j)){
-        for(int i = 0; i < codeTable[(j + 128)].size(); ++i){ // necessary character is located at possition (index) that corresponds to of its ASCII code
-            writeFile.writeBit(codeTable[(j + 128)][i]);
-        }
+    while (readFile.get(ch)){
+        codingChar(writeFile, codeTable[ch + 128], byte, possition);
+    }
+    if (possition > 0){
+        extendedToByte(writeFile, byte, possition);
     }
     readFile.close();
     writeFile.close();
