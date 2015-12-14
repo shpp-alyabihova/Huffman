@@ -131,10 +131,7 @@ unsigned int readTable(ifstream & readArch, Vector <char> & symbols, Vector<Vect
     char ch = 0;
     readArch.get(ch); // read a number of coded symbols of the sourse file
     int numCodes = ch;
-
-    if (numCodes == 0){
-        numCodes = 256;
-    }
+    numCodes = (numCodes == 0) ? 256 : numCodes;
 
     for(int i = 0; i < numCodes; ++i){ // read a code table
         readArch.get(ch);
@@ -149,13 +146,12 @@ unsigned int readTable(ifstream & readArch, Vector <char> & symbols, Vector<Vect
 Vector <bool> readCode(ifstream & readArch, int codeSize){
     Vector<bool> code;
     int size = (codeSize / 8 ) + ((codeSize % 8) ? 1 : 0); // size of buffer for reading bytes
-    char * buff = new char [size];
+    char buff [size];
     readArch.read(buff, size);
     for (int i = 0; i < codeSize; ++i){
         code.add(buff[i/8] < 0); // check most significant bit that is responsible for the sign of char
         buff[i/8] = buff[i/8] << 1;
     }
-    delete [] buff;
     return code;
 }
 

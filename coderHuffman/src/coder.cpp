@@ -275,7 +275,7 @@ void writeCode(ofstream & writefile, Vector<bool> code){
           code.add(0);          // append it with 0
       }
       int size = (code.size() / 8 );
-      char * buff = new char [size];
+      char buff [size];
       char byte = 0;
 
       for (int i = 0; i < code.size(); ++i){
@@ -286,7 +286,6 @@ void writeCode(ofstream & writefile, Vector<bool> code){
           }
       }
       writefile.write(buff, size);
-      delete [] buff;
 }
 
 
